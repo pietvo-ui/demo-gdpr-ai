@@ -83,8 +83,12 @@ if "Stato Azione" in azioni.columns:
     azioni["Stato Azione"] = azioni["Stato Azione"].fillna("Da avviare")
 if "Priorità" in azioni.columns:
     azioni["Priorità"] = azioni["Priorità"].fillna("Non assegnata")
-if "Scadenza" in azioni.columns:
-    azioni["Scadenza"] = pd.to_datetime(azioni["Scadenza"], errors="coerce")
+def normalize_date_column(df, column):
+    if column in df.columns:
+        df[column] = pd.to_datetime(df[column], errors="coerce", dayfirst=True)
+    return df
+
+azioni = normalize_date_column(azioni, "Scadenza")
 
 st.sidebar.header("Filtri")
 filtered_checklist = checklist.copy()
@@ -99,7 +103,9 @@ compliance = (ok / den * 100) if den else 0
 azioni_tot = int(azioni.get("Azione correttiva", pd.Series(dtype=str)).notna().sum())
 azioni_compl = int((azioni.get("Stato Azione", pd.Series(dtype=str)) == "Completata").sum())
 if "Scadenza" in azioni.columns and "Stato Azione" in azioni.columns:
-    scadute = int(((azioni["Stato Azione"] != "Completata") & azioni["Scadenza"].notna() & (azioni["Scadenza"].dt.date < date.today())).sum())
+    oggi = pd.Timestamp.today().normalize()
+    scadenze = pd.to_datetime(azioni["Scadenza"], errors="coerce", dayfirst=True)
+    scadute = int(((azioni["Stato Azione"].astype(str) != "Completata") & scadenze.notna() & (scadenze < oggi)).sum())
 else:
     scadute = 0
 
@@ -138,7 +144,7 @@ with tab2:
     st.subheader("Registro azioni / remediation")
     az_view = azioni.copy()
     if "Scadenza" in az_view.columns:
-        az_view["Scadenza"] = az_view["Scadenza"].dt.strftime("%d/%m/%Y").fillna("")
+        az_view["Scadenza"] = pd.to_datetime(az_view["Scadenza"], errors="coerce", dayfirst=True).dt.strftime("%d/%m/%Y").fillna("")
     st.dataframe(az_view, use_container_width=True, hide_index=True)
     if "Stato Azione" in azioni.columns:
         az_count = azioni["Stato Azione"].value_counts().reset_index()
